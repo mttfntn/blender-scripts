@@ -314,7 +314,7 @@ def _set_input(mod, name, value):
     raise KeyError(name)
 
 
-# --- Operator -----------------------------------------------------------------
+# --- Adding the deform to an object --------------------------------------------
 
 def _new_empty(context, name, display_type, size, parent=None, location=(0.0, 0.0, 0.0)):
     """Create an empty in the active collection."""
@@ -327,82 +327,49 @@ def _new_empty(context, name, display_type, size, parent=None, location=(0.0, 0.
     return empty
 
 
-class OBJECT_OT_add_gn_simple_deform(bpy.types.Operator):
-    """Add a Geometry Nodes Simple Deform with two falloff empties"""
+def add_simple_deform(context, obj):
+    """Add the modifier and its three empties to `obj`; return the modifier."""
+    ng = get_node_group()
 
-    bl_idname = "object.add_gn_simple_deform"
-    bl_label = "Add GN Simple Deform"
-    bl_options = {'REGISTER', 'UNDO'}
+    # Origin sits at the object's origin with its rotation (no scale).
+    loc, rot, _scale = obj.matrix_world.decompose()
+    origin_matrix = Matrix.LocRotScale(loc, rot, Vector((1.0, 1.0, 1.0)))
+    to_origin = origin_matrix.inverted() @ obj.matrix_world
+    points = [to_origin @ v.co for v in obj.data.vertices] or [Vector()]
+    z_min = min(p.z for p in points)
+    z_max = max(p.z for p in points)
+    width = max(max(abs(p.x), abs(p.y)) for p in points)
+    ring_size = max(width * 1.25, 0.1)
 
-    @classmethod
-    def poll(cls, context):
-        obj = context.active_object
-        return context.mode == 'OBJECT' and obj is not None and obj.type == 'MESH'
+    origin = _new_empty(context, "SD_Origin", 'ARROWS', ring_size * 0.5)
+    origin.matrix_world = origin_matrix
+    start = _new_empty(context, "SD_Falloff_A", 'CIRCLE', ring_size, origin, (0.0, 0.0, z_min))
+    end = _new_empty(context, "SD_Falloff_B", 'CIRCLE', ring_size, origin, (0.0, 0.0, z_max))
+    for empty in (start, end):
+        # Circle empties lie in local XY, i.e. as rings around the Z axis.
+        empty.lock_location = (True, True, False)
 
-    def execute(self, context):
-        obj = context.active_object
-        ng = get_node_group()
+    mod = obj.modifiers.new(GROUP_NAME, 'NODES')
+    mod.node_group = ng
+    _set_input(mod, "Origin", origin)
+    _set_input(mod, "Falloff Start", start)
+    _set_input(mod, "Falloff End", end)
+    obj.update_tag()
 
-        # Origin sits at the object's origin with its rotation (no scale).
-        loc, rot, _scale = obj.matrix_world.decompose()
-        origin_matrix = Matrix.LocRotScale(loc, rot, Vector((1.0, 1.0, 1.0)))
-        to_origin = origin_matrix.inverted() @ obj.matrix_world
-        points = [to_origin @ v.co for v in obj.data.vertices] or [Vector()]
-        z_min = min(p.z for p in points)
-        z_max = max(p.z for p in points)
-        width = max(max(abs(p.x), abs(p.y)) for p in points)
-        ring_size = max(width * 1.25, 0.1)
-
-        origin = _new_empty(context, "SD_Origin", 'ARROWS', ring_size * 0.5)
-        origin.matrix_world = origin_matrix
-        start = _new_empty(context, "SD_Falloff_A", 'CIRCLE', ring_size, origin, (0.0, 0.0, z_min))
-        end = _new_empty(context, "SD_Falloff_B", 'CIRCLE', ring_size, origin, (0.0, 0.0, z_max))
-        for empty in (start, end):
-            # Circle empties lie in local XY, i.e. as rings around the Z axis.
-            empty.lock_location = (True, True, False)
-
-        mod = obj.modifiers.new(GROUP_NAME, 'NODES')
-        mod.node_group = ng
-        _set_input(mod, "Origin", origin)
-        _set_input(mod, "Falloff Start", start)
-        _set_input(mod, "Falloff End", end)
-        obj.update_tag()
-
-        # Select the end ring so it can be moved (G Z) right away.
-        for other in context.selected_objects:
-            other.select_set(False)
-        end.select_set(True)
-        context.view_layer.objects.active = end
-        return {'FINISHED'}
-
-
-def menu_func(self, context):
-    self.layout.operator(OBJECT_OT_add_gn_simple_deform.bl_idname, icon='MOD_SIMPLEDEFORM')
-
-
-def register():
-    bpy.utils.register_class(OBJECT_OT_add_gn_simple_deform)
-    bpy.types.VIEW3D_MT_object.append(menu_func)
-
-
-def unregister():
-    bpy.types.VIEW3D_MT_object.remove(menu_func)
-    bpy.utils.unregister_class(OBJECT_OT_add_gn_simple_deform)
-
-
-def _cleanup_previous_run():
-    """Remove what an earlier run of this script registered, so it can be re-run."""
-    menu = bpy.types.VIEW3D_MT_object
-    for func in list(menu._dyn_ui_initialize()):
-        if getattr(func, "__name__", "") == "menu_func" and func.__module__ == __name__:
-            menu.remove(func)
-    old_cls = getattr(bpy.types, OBJECT_OT_add_gn_simple_deform.__name__, None)
-    if old_cls is not None:
-        bpy.utils.unregister_class(old_cls)
+    # Select the end ring so it can be moved (G Z) right away.
+    for other in context.selected_objects:
+        other.select_set(False)
+    end.select_set(True)
+    context.view_layer.objects.active = end
+    return mod
 
 
 if __name__ == "__main__":
-    _cleanup_previous_run()
-    register()
-    if bpy.ops.object.add_gn_simple_deform.poll():
-        bpy.ops.object.add_gn_simple_deform()
+    active = bpy.context.active_object
+    if bpy.context.mode != 'OBJECT':
+        print("GN Simple Deform: switch to Object Mode first")
+    elif active is not None and active.type == 'MESH':
+        add_simple_deform(bpy.context, active)
+        print(f"GN Simple Deform added to {active.name}")
+    else:
+        print("GN Simple Deform: make a mesh object active first")

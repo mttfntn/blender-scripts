@@ -6,7 +6,7 @@ Usage (from the repository root):
     blender -b --factory-startup --python tests/run_tests.py -- [--scripts DIR] [--json OUT]
 
 Each script is run the way a user runs it (as "__main__", like Run Script in
-the Text Editor), then its operator is called with a broad set of options.
+the Text Editor), then its main function is called with a broad set of options.
 Every test checks known-correct values and also records a fingerprint of the
 resulting geometry. --json writes those fingerprints, so two versions of the
 scripts can be compared (see tests/compare.py). Exit code 1 means a failure.
@@ -85,8 +85,24 @@ def make_bar(axis="Z", cuts=20):
     return bar
 
 
-def menu_entries(menu):
-    return [f for f in menu._dyn_ui_initialize() if getattr(f, "__name__", "") == "menu_func"]
+def load_functions(name):
+    """Load a script's functions without running its main part."""
+    return runpy.run_path(os.path.join(ARGS.scripts, name), run_name=name[:-3])
+
+
+# Operators and menus the scripts registered before they became plain scripts.
+OLD_OPERATORS = ("OBJECT_OT_rotate_z_90", "MESH_OT_primitive_grid_circle_add",
+                 "OBJECT_OT_add_gn_simple_deform", "OBJECT_OT_setup_uv_channels")
+MENUS = ("VIEW3D_MT_transform_object", "VIEW3D_MT_mesh_add", "VIEW3D_MT_object")
+
+
+def check_registers_nothing(name):
+    """The scripts are standalone: running them must add no operator or menu entry."""
+    added_ops = [op for op in OLD_OPERATORS if hasattr(bpy.types, op)]
+    added_menus = [m for m in MENUS
+                   for f in getattr(bpy.types, m)._dyn_ui_initialize()
+                   if getattr(f, "__module__", "") == "__main__"]
+    check(f"{name} registers nothing", not added_ops and not added_menus, f"{added_ops} {added_menus}")
 
 
 # --- rotate_z_90.py ---------------------------------------------------------
@@ -104,7 +120,9 @@ def test_rotate_z_90():
     check("rotate_z_90 run", abs(math.degrees(cube.rotation_euler.z) - 90) < 1e-4,
           f"z={math.degrees(cube.rotation_euler.z)}")
     run_script("rotate_z_90.py")
-    check("rotate_z_90 rerun menu", len(menu_entries(bpy.types.VIEW3D_MT_transform_object)) == 1)
+    check("rotate_z_90 second run", abs(math.degrees(cube.rotation_euler.z) - 180) < 1e-4)
+    check_registers_nothing("rotate_z_90")
+    rotate_objects = load_functions("rotate_z_90.py")["rotate_objects"]
 
     out = {}
     for angle in (90, 45, -30, 180):
@@ -112,8 +130,10 @@ def test_rotate_z_90():
             for target in ("cube", "child"):
                 obj = cube if target == "cube" else child
                 select_only(obj)
+                # Refresh parent/child matrices, as Blender does between two script runs.
+                bpy.context.view_layer.update()
                 before = obj.matrix_world.copy()
-                bpy.ops.object.rotate_z_90(angle=math.radians(angle), clockwise=clockwise)
+                rotate_objects([obj], angle, clockwise)
                 signed = -angle if clockwise else angle
                 expected = Matrix.Translation(before.translation) @ Matrix.Rotation(math.radians(signed), 4, 'Z') \
                     @ Matrix.Translation(-before.translation) @ before
@@ -131,14 +151,15 @@ def test_grid_circle():
     obj = bpy.context.active_object
     check("grid_circle default faces", obj is not None and len(obj.data.polygons) == 64)
     run_script("grid_circle.py")
-    check("grid_circle rerun menu", len(menu_entries(bpy.types.VIEW3D_MT_mesh_add)) == 1)
+    check("grid_circle second run adds another", len(bpy.data.objects) == 2)
+    check_registers_nothing("grid_circle")
+    add_grid_circle = load_functions("grid_circle.py")["add_grid_circle"]
 
     out = {}
     for subdivisions in (1, 2, 8, 17):
         for roundness in (0.0, 0.5, 1.0):
             for radius in (0.5, 2.0):
-                bpy.ops.mesh.primitive_grid_circle_add(
-                    subdivisions=subdivisions, roundness=roundness, radius=radius)
+                add_grid_circle(bpy.context, radius=radius, subdivisions=subdivisions, roundness=roundness)
                 me = bpy.context.active_object.data
                 tag = f"{subdivisions}:{roundness}:{radius}"
                 check(f"grid_circle faces {tag}", len(me.polygons) == subdivisions ** 2)
@@ -231,7 +252,8 @@ def test_gn_simple_deform():
     select_only(bar)
     run_script("gn_simple_deform.py")
     check("gn rerun reuses group", len([g for g in bpy.data.node_groups if g.name.startswith("GN Simple Deform")]) == 1)
-    check("gn rerun menu", len(menu_entries(bpy.types.VIEW3D_MT_object)) == 1)
+    check("gn second run adds a second modifier", len(bar.modifiers) == 2)
+    check_registers_nothing("gn_simple_deform")
 
 
 # --- uv_channels.py ---------------------------------------------------------
@@ -266,7 +288,7 @@ def test_uv_channels():
         check(f"uv copy {obj.name}", same)
         out[obj.name] = {"names": names, "uv": fingerprint([Vector((*l.vector, 0)) for l in uvs["UV_Graphics"].uv])}
     check("uv layout kept", [tuple(l.vector) for l in cube.data.uv_layers["UV_Materials"].uv] == before)
-    check("uv rerun menu", len(menu_entries(bpy.types.VIEW3D_MT_object)) == 1)
+    check_registers_nothing("uv_channels")
     results["uv_channels"] = out
 
 
