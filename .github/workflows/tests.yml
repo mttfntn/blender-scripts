@@ -1,0 +1,104 @@
+name: Tests
+
+# Runs the test suite in Blender 5.3 on every push and pull request.
+# Pushing a tag vX.Y.Z also builds the zip and publishes a GitHub release,
+# in this same job (no artifacts are stored).
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  BLENDER_VERSION: "5.3.0"
+  BLENDER_SERIES: "5.3"
+  # From https://download.blender.org/release/Blender5.3/blender-5.3.0.sha256
+  BLENDER_SHA256: "dacb8264197a3f7fda6001285a5a506fc97ee943881261c2c3bd63c882f22e05"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the workflow's Blender version matches manifest.json
+        run: |
+          test "$(jq -r .blender_download manifest.json)" = "$BLENDER_VERSION"
+
+      - name: Cache Blender
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: blender.tar.xz
+          key: blender-${{ env.BLENDER_VERSION }}-${{ env.BLENDER_SHA256 }}
+
+      - name: Download Blender (with retries and mirrors)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          file="blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+          for base in \
+              https://download.blender.org/release \
+              https://mirrors.ocf.berkeley.edu/blender/release \
+              https://ftp.halifax.rwth-aachen.de/blender/release \
+              https://mirror.clarkson.edu/blender/release; do
+            url="$base/Blender${BLENDER_SERIES}/$file"
+            echo "Trying $url"
+            if curl -fL --retry 3 --retry-delay 5 --connect-timeout 30 -o blender.tar.xz "$url" \
+                && echo "$BLENDER_SHA256  blender.tar.xz" | sha256sum -c -; then
+              exit 0
+            fi
+            rm -f blender.tar.xz
+          done
+          echo "Could not download a Blender build with the expected checksum" >&2
+          exit 1
+
+      - name: Verify checksum and unpack Blender
+        run: |
+          echo "$BLENDER_SHA256  blender.tar.xz" | sha256sum -c -
+          mkdir blender && tar -xf blender.tar.xz -C blender --strip-components=1
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libxkbcommon0 libsm6 libgl1 libegl1 > /dev/null
+
+      - name: Run tests (scratch profile, factory settings)
+        run: |
+          mkdir -p "$RUNNER_TEMP/blender-profile"
+          BLENDER_USER_RESOURCES="$RUNNER_TEMP/blender-profile" \
+            ./blender/blender -b --factory-startup --python-exit-code 1 --python tests/run_tests.py
+
+      - name: Build release zip
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: python tools/build_release.py --tag "$GITHUB_REF_NAME" --badge-json download-size.json
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # actions/checkout may leave a lightweight copy of the tag; fetch the
+          # real tag object so its message can be used as the release notes.
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > notes.md
+          name="$(jq -r .name manifest.json)"
+          gh release create "$GITHUB_REF_NAME" "dist/$name-$GITHUB_REF_NAME.zip" \
+            --title "$name $GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+
+      - name: Update the download-size badge (badges branch)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          # shields.io can't read release download URLs, so the badge reads this
+          # file from the separate "badges" branch instead. Don't delete it.
+          cp download-size.json "$RUNNER_TEMP/"
+          cd "$RUNNER_TEMP" && mkdir badges && cd badges
+          git init -q -b badges
+          cp ../download-size.json .
+          git add download-size.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Download size for $GITHUB_REF_NAME"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" badges
