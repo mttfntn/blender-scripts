@@ -51,6 +51,8 @@ def main():
             # Fixed timestamp so the same sources always give the same zip.
             info = zipfile.ZipInfo(f"{name}/{rel}", date_time=(2026, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
+            # Python records the building OS; fix it so Windows and CI builds match.
+            info.create_system = 3
             with open(os.path.join(ROOT, rel), "rb") as f:
                 zf.writestr(info, f.read())
 
