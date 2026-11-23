@@ -34,6 +34,9 @@ its own menu entry instead of adding a second one.
 More detail on each script, including known limits, is in
 [HANDOVER.md](HANDOVER.md#the-scripts).
 
+> **Tip:** I usually include these in a personal add-on created using
+> [Scripting Nodes](https://scriptingnodes.com/) by Joshua Knauber.
+
 ## Requirements
 
 - Blender 5.3. Other versions are not tested; `gn_simple_deform.py` in
