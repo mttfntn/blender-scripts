@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: How to use the scripts
+    url: https://github.com/mttfntn/blender-scripts#usage
+    about: Read the usage steps and the scripts table before opening an issue.
+  - name: Report a security problem privately
+    url: https://github.com/mttfntn/blender-scripts/security/advisories/new
+    about: Please don't report security problems in public issues.

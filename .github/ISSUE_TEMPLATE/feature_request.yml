@@ -1,0 +1,27 @@
+name: Feature request
+description: An idea for a new script or a change to an existing one.
+labels: ["enhancement"]
+body:
+  - type: input
+    id: script
+    attributes:
+      label: Script
+      description: Which script this is about, or "new script".
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you want to do
+      description: The task in Blender you are trying to get done, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How it could work
+      description: Options, defaults, where it would appear in Blender.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or examples
