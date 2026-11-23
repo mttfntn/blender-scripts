@@ -1,7 +1,11 @@
-# PROXY_Setup script
-# Paste in Blender's Text Editor and press Run Script (Alt+P).
-# Adds the PROXY_Setup geometry nodes modifier to every selected mesh.
-# If the PROXY_Setup node group already exists, it is reused.
+"""Add the PROXY_Setup Geometry Nodes modifier to every selected mesh.
+
+In the viewport it merges vertices closer than DISTANCE (a lighter
+preview); renders use the full mesh. If the PROXY_Setup node group already
+exists it is reused, and meshes that already have it are skipped.
+
+Paste in Blender's Text Editor and press Run Script (Alt+P).
+"""
 
 import bpy
 
@@ -10,6 +14,11 @@ DISTANCE = 0.01
 
 
 def build_group():
+    """Create the PROXY_Setup node group.
+
+    In the viewport the mesh goes through Merge by Distance; at render time
+    the Is Viewport switch passes the original geometry through unchanged.
+    """
     group = bpy.data.node_groups.new(GROUP_NAME, 'GeometryNodeTree')
     group.is_modifier = True
 
@@ -28,10 +37,7 @@ def build_group():
 
     n_merge = nodes.new('GeometryNodeMergeByDistance')
     n_merge.location = (-150, -100)
-    if hasattr(n_merge, "mode"):          # Blender 4.x
-        n_merge.mode = 'ALL'
-    elif "Mode" in n_merge.inputs:        # Blender 5.x
-        n_merge.inputs["Mode"].default_value = 'All'
+    n_merge.inputs["Mode"].default_value = 'All'
 
     n_view = nodes.new('GeometryNodeIsViewport')
     n_view.location = (-150, 150)

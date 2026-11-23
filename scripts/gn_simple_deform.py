@@ -123,22 +123,24 @@ class TreeBuilder:
         return node.outputs["Output"]
 
 
-def _new_input(ng, name, socket_type, default=None, min_value=None, max_value=None,
-               subtype=None, description="", parent=None):
+def _new_input(ng, name, socket_type, default=None, subtype=None, description="", parent=None):
+    """Add a modifier input socket to the node group's interface."""
     sock = ng.interface.new_socket(name, in_out='INPUT', socket_type=socket_type,
                                    description=description, parent=parent)
     if default is not None and socket_type != 'NodeSocketMenu':
         sock.default_value = default
-    if min_value is not None:
-        sock.min_value = min_value
-    if max_value is not None:
-        sock.max_value = max_value
     if subtype is not None:
         sock.subtype = subtype
     return sock
 
 
 def build_node_group():
+    """Create the "GN Simple Deform" node group.
+
+    Data flow: object positions -> Origin space -> axis space (chosen axis
+    becomes local Z) -> falloff 0..1 between the two empties -> one of the
+    four deforms -> back to object space -> Set Position.
+    """
     ng = bpy.data.node_groups.new(GROUP_NAME, 'GeometryNodeTree')
     ng.is_modifier = True
 
@@ -291,37 +293,30 @@ def build_node_group():
 
 
 def get_node_group():
+    """Return the existing node group, or build it on the first run."""
     ng = bpy.data.node_groups.get(GROUP_NAME)
     if ng is None or ng.bl_idname != 'GeometryNodeTree':
         ng = build_node_group()
     return ng
 
 
-# --- Modifier input access (works across Blender versions) -------------------
+# --- Modifier input access ----------------------------------------------------
 
-def _input_id(ng, name):
-    for item in ng.interface.items_tree:
+def _set_input(mod, name, value):
+    """Set the modifier input called `name` (the panel label) to `value`."""
+    # Blender 5.2+ exposes inputs as mod.properties.inputs.<identifier>.value;
+    # the old mod["Socket_N"] = value form raises TypeError there.
+    for item in mod.node_group.interface.items_tree:
         if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.name == name:
-            return item.identifier
+            getattr(mod.properties.inputs, item.identifier).value = value
+            return
     raise KeyError(name)
-
-
-def _has_input_api(mod):
-    # Newer Blender exposes modifier inputs as mod.properties.inputs.<id>.value;
-    # older 4.x/5.x versions store them as ID properties, mod["<id>"].
-    return hasattr(getattr(mod, "properties", None), "inputs")
-
-
-def _set_input(mod, identifier, value):
-    if _has_input_api(mod):
-        getattr(mod.properties.inputs, identifier).value = value
-    else:
-        mod[identifier] = value
 
 
 # --- Operator -----------------------------------------------------------------
 
 def _new_empty(context, name, display_type, size, parent=None, location=(0.0, 0.0, 0.0)):
+    """Create an empty in the active collection."""
     empty = bpy.data.objects.new(name, None)
     empty.empty_display_type = display_type
     empty.empty_display_size = size
@@ -367,9 +362,9 @@ class OBJECT_OT_add_gn_simple_deform(bpy.types.Operator):
 
         mod = obj.modifiers.new(GROUP_NAME, 'NODES')
         mod.node_group = ng
-        _set_input(mod, _input_id(ng, "Origin"), origin)
-        _set_input(mod, _input_id(ng, "Falloff Start"), start)
-        _set_input(mod, _input_id(ng, "Falloff End"), end)
+        _set_input(mod, "Origin", origin)
+        _set_input(mod, "Falloff Start", start)
+        _set_input(mod, "Falloff End", end)
         obj.update_tag()
 
         # Select the end ring so it can be moved (G Z) right away.
