@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Rotate selected objects 90 degrees around their Z axis.
 
 Run from Blender's Text Editor (Run Script). It registers the operator

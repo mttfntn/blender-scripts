@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Roll the 3D Viewport around the axis pointing out of the screen.
 
 Run from Blender's Text Editor. Change ANGLE_DEGREES to roll by another amount.

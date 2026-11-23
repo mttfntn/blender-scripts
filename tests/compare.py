@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Compare two result files written by run_tests.py --json.
 
 Usage: python tests/compare.py before.json after.json

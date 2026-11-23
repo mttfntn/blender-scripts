@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Add the PROXY_Setup Geometry Nodes modifier to every selected mesh.
 
 In the viewport it merges vertices closer than DISTANCE (a lighter

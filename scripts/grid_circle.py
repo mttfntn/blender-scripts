@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Add a "Grid Circle" mesh primitive: a flat disc filled with clean quads.
 
 A square grid is warped into a disc, so every face is a quad and the mesh

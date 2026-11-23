@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Set up two UV channels on the selected mesh objects.
 
   * Channel 1: the current first UV map, renamed to UV_Materials.

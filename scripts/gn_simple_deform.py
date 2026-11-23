@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Simple Deform (Twist / Bend / Taper / Stretch) rebuilt in Geometry Nodes,
 with a falloff controlled by two empties on the deform axis.
 
