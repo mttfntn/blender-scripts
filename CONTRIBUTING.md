@@ -40,10 +40,9 @@ out of it, set `BLENDER_USER_RESOURCES` to an empty folder first.
   no imports between scripts.
 - Settings users might edit are constants at the top of the file.
 - Start every file with the SPDX line and a short module description.
-- Operator class docstrings are the tooltips Blender shows: keep them to one
-  short line and use `#` comments for anything else.
-- Follow the shared pattern in [HANDOVER.md](HANDOVER.md#the-common-script-pattern),
-  including `_cleanup_previous_run()` so scripts can be run twice.
+- Scripts run once and register nothing: no operators, menu entries or
+  handlers. Follow the shared pattern in
+  [HANDOVER.md](HANDOVER.md#the-common-script-pattern).
 - Commit messages say what changed and how it was verified.
 
 ## License of contributions

@@ -13,5 +13,5 @@
 ## Checklist
 
 - [ ] Each script is still one self-contained file with its SPDX line and module description
-- [ ] Operator docstrings stay one-line tooltips
-- [ ] README scripts table and HANDOVER.md updated if behaviour or options changed
+- [ ] The script still registers nothing (no operators, menu entries or handlers)
+- [ ] README scripts table and HANDOVER.md updated if behaviour or settings changed

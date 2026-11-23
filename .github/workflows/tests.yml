@@ -1,18 +1,16 @@
 name: Tests
 
 # Runs the test suite in Blender 5.3 on every push and pull request.
-# Pushing a tag vX.Y.Z also builds the zip and publishes a GitHub release,
-# in this same job (no artifacts are stored).
+# The project has no releases, so nothing is built or stored.
 
 on:
   push:
     branches: [main]
-    tags: ["v*.*.*"]
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   BLENDER_VERSION: "5.3.0"
@@ -71,34 +69,3 @@ jobs:
           mkdir -p "$RUNNER_TEMP/blender-profile"
           BLENDER_USER_RESOURCES="$RUNNER_TEMP/blender-profile" \
             ./blender/blender -b --factory-startup --python-exit-code 1 --python tests/run_tests.py
-
-      - name: Build release zip
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: python tools/build_release.py --tag "$GITHUB_REF_NAME" --badge-json download-size.json
-
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # actions/checkout may leave a lightweight copy of the tag; fetch the
-          # real tag object so its message can be used as the release notes.
-          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
-          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > notes.md
-          name="$(jq -r .name manifest.json)"
-          gh release create "$GITHUB_REF_NAME" "dist/$name-$GITHUB_REF_NAME.zip" \
-            --title "$name $GITHUB_REF_NAME" --notes-file notes.md --verify-tag
-
-      - name: Update the download-size badge (badges branch)
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          # shields.io can't read release download URLs, so the badge reads this
-          # file from the separate "badges" branch instead. Don't delete it.
-          cp download-size.json "$RUNNER_TEMP/"
-          cd "$RUNNER_TEMP" && mkdir badges && cd badges
-          git init -q -b badges
-          cp ../download-size.json .
-          git add download-size.json
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -q -m "Download size for $GITHUB_REF_NAME"
-          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" badges

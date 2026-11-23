@@ -2,10 +2,8 @@
 
 ## Supported versions
 
-| blender-scripts | Blender | Supported |
-| --- | --- | --- |
-| latest release | 5.3 | yes |
-| older releases | any | no |
+Only the scripts on the `main` branch, run in Blender 5.3, are supported.
+There are no releases.
 
 ## Reporting a problem
 
@@ -17,5 +15,4 @@ Include which script is affected, the Blender version, and the steps or file
 that show the problem. You'll get a reply as soon as the report has been read.
 
 These scripts run with full access to Blender's Python, like any script you
-run from the Text Editor. Only run copies you got from this repository or its
-releases.
+run from the Text Editor. Only run copies you got from this repository.

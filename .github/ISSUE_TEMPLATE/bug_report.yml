@@ -26,8 +26,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: blender-scripts version
-      description: The release you downloaded (for example v1.0.0), or the commit if you copied the script from the repository.
+      label: When you copied the script
+      description: The date, or the commit shown on the script's GitHub page.
     validations:
       required: true
   - type: input
@@ -41,7 +41,7 @@ body:
     id: steps
     attributes:
       label: Steps to reproduce
-      description: What was selected, which options you used (redo panel or modifier settings), and what you clicked.
+      description: What was selected, which settings you used (values at the top of the script, or modifier settings), and what you clicked.
       placeholder: |
         1. Add a cylinder and subdivide it
         2. Run gn_simple_deform.py
