@@ -28,6 +28,7 @@ def square_to_disc(x, y):
 
 
 def build_grid_circle(radius, subdivisions, roundness):
+    """Return a new mesh: a subdivisions x subdivisions quad grid warped into a disc."""
     bm = bmesh.new()
     n = subdivisions
     verts = []

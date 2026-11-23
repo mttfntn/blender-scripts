@@ -1,6 +1,6 @@
 """Roll the 3D Viewport around the axis pointing out of the screen.
 
-Run from Blender's Text Editor (Blender 3.2 or newer).
+Run from Blender's Text Editor. Change ANGLE_DEGREES to roll by another amount.
 """
 
 import math
@@ -29,6 +29,7 @@ def show_message(message):
 
 
 def rotate_view(degrees=ANGLE_DEGREES):
+    """Roll the first 3D Viewport in the current window by `degrees`."""
     window = bpy.context.window
     area, region = find_view3d(window)
     if area is None:
