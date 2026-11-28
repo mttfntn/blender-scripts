@@ -20,8 +20,9 @@ python tests/compare.py before.json after.json     # exit 1 on any difference
 Local Blender: `C:\Program Files\Blender Foundation\Blender 5.3\blender.exe`.
 
 ## Architecture
-- Every script: SPDX line + docstring → constants → plain functions taking settings as defaults (`rotate_objects`, `add_grid_circle`, `add_simple_deform`, `setup_uv_channels`, `rotate_view`) → `__main__` checks context (Object Mode / active mesh), calls once, prints one line. `proxy_setup` runs top to bottom.
+- Every script: SPDX line + docstring → constants → plain functions taking settings as defaults (`rotate_objects`, `add_grid_circle`, `add_simple_deform`, `setup_uv_channels`, `rotate_view`, `quad_fill`) → `__main__` checks context (Object Mode / active mesh), calls once, prints one line. `proxy_setup` runs top to bottom.
 - Tests load functions with `runpy.run_path(path, run_name="<name>")` (skips `__main__`) and assert `check_registers_nothing`.
+- `quad_fill` (Edit Mode): selected border loops → `candidate_layouts` (4 corners + orientation, scored by angle and side balance) → `plan_rows` (grid / shrink2 = 3-1, 4-2: outer columns turn, inner run into trapezoids / corner = 2-3: centred split + edge to the extra right-side vertex / one triangle if odd) → `layout_faces` (exact square coordinates, no relaxing) → `build_patch` (Coons patch) → `is_clean` check, else next layout, else triangle fill + join. Faces selected on run → `clear_fill` + next of `layout_variants` (matched by `signature`), so re-running cycles rotations; `LAYOUT` > 0 fixes the variant number instead. Pure functions are testable without a mesh.
 - `gn_simple_deform` data flow: position → inverse Origin transform → axis swizzle (chosen axis → local Z) → t = clamp((z−A)/(B−A)) (A/B = ring empties, or mesh min/max if Use Falloff off; Invert swaps) → Float Curve (not for Bend) → Twist/Bend/Taper/Stretch via Index Switch → inverse swizzle → Origin transform → Set Position; stores `falloff` attribute. Node group reused by name `GN Simple Deform`. Built with `TreeBuilder` helper.
 
 ## Rules and pitfalls

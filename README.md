@@ -19,6 +19,7 @@ operators), so it leaves no trace in Blender's interface.
 | [`gn_simple_deform.py`](scripts/gn_simple_deform.py) | Blender's Simple Deform (Twist, Bend, Taper, Stretch) rebuilt in Geometry Nodes, added to the active mesh, with a falloff controlled by two ring empties on the deform axis plus an Origin empty for pivot and orientation. All controls are in the modifier panel. | none (use the modifier panel) |
 | [`uv_channels.py`](scripts/uv_channels.py) | Renames the first UV map of the selected meshes to `UV_Materials` and adds `UV_Graphics` as a copy of it. Safe to run twice. | `MATERIALS_UV`, `GRAPHICS_UV` |
 | [`proxy_setup.py`](scripts/proxy_setup.py) | Adds a `PROXY_Setup` Geometry Nodes modifier to the selected meshes: lighter in the viewport (merge by distance), full mesh at render time. | `DISTANCE` |
+| [`quad_fill.py`](scripts/quad_fill.py) | Fills the selected holes with quads, like Grid Fill, but the sides don't need matching edge counts: it finds the 4 corners and builds straight strips joined by the classic cheat-sheet transitions (3-1, 4-2, 5-3 and 1-2, 2-3, 3-4). A hole with an odd number of edges gets exactly one triangle. Edit Mode: select the hole's border (Alt+click). Run it again with the new faces still selected to cycle through the other rotations, or set `LAYOUT` to pick one. | `LAYOUT`, `ALLOW_TRIANGLE`, `FALLBACK_FILL` |
 | [`rotate_view.py`](scripts/rotate_view.py) | Rolls the 3D Viewport 90° around the axis pointing out of the screen. Only the view changes, not the objects. | `ANGLE_DEGREES` |
 
 ## Usage
@@ -31,7 +32,7 @@ operators), so it leaves no trace in Blender's interface.
 
 `rotate_z_90.py`, `gn_simple_deform.py` and `uv_channels.py` only run in
 Object Mode; in another mode they print a message to the system console and
-do nothing.
+do nothing. `quad_fill.py` is the opposite: it only runs in Edit Mode.
 
 More detail on each script, including known limits, is in
 [HANDOVER.md](HANDOVER.md#the-scripts).

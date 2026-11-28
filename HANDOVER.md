@@ -32,6 +32,7 @@ licensed GPL-3.0-or-later. It is not a fork.
 | `scripts/gn_simple_deform.py` | `add_simple_deform()`: builds the "GN Simple Deform" node group, modifier and empties. |
 | `scripts/uv_channels.py` | `setup_uv_channels()`: `UV_Materials` + `UV_Graphics`. |
 | `scripts/proxy_setup.py` | Adds the "PROXY_Setup" Geometry Nodes modifier (runs top to bottom). |
+| `scripts/quad_fill.py` | `quad_fill()`: fills selected holes with quads, picking reduction patterns from the side edge counts. |
 | `scripts/rotate_view.py` | `rotate_view()`: rolls the 3D Viewport. |
 | `tests/run_tests.py` | Test suite, run inside background Blender. |
 | `tests/compare.py` | Diffs two `run_tests.py --json` result files. |
@@ -108,6 +109,37 @@ Builds the "PROXY_Setup" group: Merge by Distance (`DISTANCE`, mode All) feeds
 a Switch driven by Is Viewport, so the viewport shows the merged mesh and
 renders use the original. Skips meshes that already have it.
 
+### quad_fill.py
+Edit Mode only. Selected border edges (edges with at most one face) are
+ordered into closed loops; each loop is filled on its own. For a loop of n
+edges it tries corner sets (all vertices for n <= 24, otherwise the 12
+sharpest plus 16 evenly spaced) and scores them by turning angle minus
+`BALANCE_WEIGHT` times how far the sides are from n/4. For each corner set it
+tries the 8 orientations until `plan_rows(bottom, right, top, left)` accepts
+one: with h = bottom − top and v = right − left (h >= v >= 0) it stacks
+`(h−v)//2` "shrink2" rows, v "corner" rows, one "triangle" row if the edge
+count is odd, and grid rows for the rest of the left side (it fails if the
+left side is too short). `layout_faces` builds them: "shrink2" (3-1, 4-2,
+5-3: outer bottom columns turn into the sides, the inner ones end on a line
+of new vertices halfway up, trapezoids join that line to the row above),
+"corner" (1-2, 2-3: a split vertex under the middle top edge, plus an edge
+across to the extra right-side vertex, splitting the columns on its way).
+Vertices get square coordinates directly, with no relaxing: columns take
+the u of the bottom side's vertices below the changing rows and of the top
+side's above them, rows run straight from a left to a right side vertex.
+`build_patch` maps them onto the Coons patch of the 4 sides, so the fill
+follows the border's curvature. The first layout with no
+flat face and no neighbouring faces bent more than ~70° wins (up to
+`MAX_LAYOUTS_TRIED`); otherwise `FALLBACK_FILL` triangle-fills and joins
+triangles. `layout_variants` lists the other fills for the same corners
+(all 8 orientations × changing rows in the middle / at the start / at the
+end, duplicates removed by `signature`, the border vertices each face uses).
+If faces are selected when the script runs, each connected group is removed
+(`clear_fill`, border kept) and filled with the variant after the one it
+matches, so re-running cycles; nothing is stored on the mesh. `LAYOUT` > 0
+uses that variant number instead (wrapping), for new and re-filled holes. New faces
+copy material and smooth shading from a neighbour, get normals matching it, and are selected. UVs are not interpolated.
+
 ### rotate_view.py
 Finds the first 3D Viewport in the current window and calls
 `view3d.view_roll` with `ANGLE_DEGREES`.
@@ -128,7 +160,7 @@ Finds the first 3D Viewport in the current window and calls
 blender -b --factory-startup --python-exit-code 1 --python tests/run_tests.py
 ```
 
-Exit code 0 and `6 tests, 0 failure(s)` means pass. Use a scratch profile so
+Exit code 0 and `7 tests, 0 failure(s)` means pass. Use a scratch profile so
 your own Blender settings and add-ons are never involved:
 
 ```bash
@@ -180,6 +212,9 @@ The only supported version is set in three places that must agree:
   space, so a scaled object scales the falloff too.
 - `rotate_view.py` uses the first 3D Viewport in the window, which may not be
   the one under the mouse; in Quad View, locked panes may not roll.
+- `quad_fill.py`: holes are treated as 4-sided patches, so very uneven
+  holes (for example a long side opposite a 1-edge side) may get odd corner
+  choices or the triangle-fill fallback; new faces have no UVs.
 - Without a redo panel, options can't be tweaked after running: change the
   constants and run again (Ctrl+Z first to undo the previous run).
 - Running a script through a remote socket (for example a Blender MCP server)

@@ -14,6 +14,7 @@ scripts can be compared (see tests/compare.py). Exit code 1 means a failure.
 
 import argparse
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -342,8 +343,108 @@ def test_rotate_view():
     results["rotate_view"] = {"angle": ns["ANGLE_DEGREES"]}
 
 
+# --- quad_fill.py -----------------------------------------------------------
+
+def make_hole_frame(bm, sides, bulge=0.0):
+    """A ring of quads around a rectangular hole whose 4 sides have the given
+    edge counts (bottom, right, top, left). Returns the hole's border verts.
+    bulge > 0 curves the frame like a dome."""
+    a, b, c, d = sides
+    pts = ([Vector((i / a, 0, 0)) for i in range(a)] + [Vector((1, i / b, 0)) for i in range(b)]
+           + [Vector((1 - i / c, 1, 0)) for i in range(c)] + [Vector((0, 1 - i / d, 0)) for i in range(d)])
+    centre = Vector((0.5, 0.5, 0))
+    inner = [bm.verts.new(p + Vector((0, 0, -bulge * (p - centre).length_squared))) for p in pts]
+    outer = [bm.verts.new(centre + (p - centre) * 1.6) for p in pts]
+    for i in range(len(pts)):
+        j = (i + 1) % len(pts)
+        bm.faces.new((inner[i], outer[i], outer[j], inner[j]))
+    return inner
+
+
+def test_quad_fill():
+    import bmesh
+    reset_scene()
+    ns = load_functions("quad_fill.py")
+    check("quad_fill plan 3 to 1", ns["plan_rows"](3, 1, 1, 1) == ["shrink2"])
+    check("quad_fill plan grid", ns["plan_rows"](4, 3, 4, 3) == ["grid"] * 3)
+    check("quad_fill plan corner", ns["plan_rows"](3, 3, 2, 2) == ["corner", "grid"])
+    check("quad_fill plan odd", ns["plan_rows"](2, 1, 1, 1, allow_triangle=False) is None)
+
+    out = {}
+    for sides in itertools.product(range(1, 6), repeat=4):
+        for bulge in (0.0, 0.6):
+            bm = bmesh.new()
+            border = make_hole_frame(bm, sides, bulge)
+            frame_faces = len(bm.faces)
+            new_faces, how, _, _ = ns["fill_loop"](bm, border)
+            bm.normal_update()
+            tag = f"{sides}:{bulge}"
+            odd = sum(sides) % 2
+            tris = sum(len(f.verts) == 3 for f in new_faces)
+            check(f"quad_fill filled {tag}", how in ("quads", "triangle"), how)
+            check(f"quad_fill closed {tag}",
+                  sum(e.is_boundary for e in bm.edges) == len(border), "hole left open")
+            check(f"quad_fill manifold {tag}",
+                  all(e.is_contiguous for e in bm.edges if not e.is_boundary), "bad normals")
+            check(f"quad_fill faces {tag}", tris == odd and all(len(f.verts) <= 4 for f in new_faces),
+                  f"{tris} triangles")
+            check(f"quad_fill no folds {tag}",
+                  all(f.normal.z > 0.05 and f.calc_area() > 1e-6 for f in new_faces), "folded face")
+            check(f"quad_fill count {tag}", len(bm.faces) == frame_faces + len(new_faces))
+            out[tag] = fingerprint(sorted(v.co for v in bm.verts))
+            bm.free()
+
+    # Run it the way a user does: Edit Mode, hole border selected.
+    me = bpy.data.meshes.new("hole")
+    bm = bmesh.new()
+    border = set(make_hole_frame(bm, (4, 2, 3, 2)))
+    for e in bm.edges:
+        e.select = all(v in border for v in e.verts)
+    bm.to_mesh(me)
+    bm.free()
+    obj = bpy.data.objects.new("hole", me)
+    bpy.context.collection.objects.link(obj)
+    select_only(obj)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_mode(type='EDGE')
+    run_script("quad_fill.py")
+    bpy.ops.object.mode_set(mode='OBJECT')
+    check("quad_fill main fills", len(me.polygons) == 11 + 7, f"{len(me.polygons)} faces")
+    check("quad_fill main selects new", sum(p.select for p in me.polygons) == 7)
+
+    # Running again with the new faces selected cycles through the layouts.
+    def layout_now():
+        return sorted(tuple(sorted(tuple(round(c, 3) for c in me.vertices[i].co) for i in p.vertices))
+                      for p in me.polygons if p.select)
+    seen = [layout_now()]
+    for run in range(3):
+        bpy.ops.object.mode_set(mode='EDIT')
+        stats = ns["quad_fill"](obj)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        check(f"quad_fill cycle {run} variant", stats["cycled"] and stats["variants"] == [((run + 1) % 3 + 1, 3)],
+              str(stats))
+        check(f"quad_fill cycle {run} frame kept", sum(not p.select for p in me.polygons) == 11)
+        seen.append(layout_now())
+    check("quad_fill cycle distinct", len({str(x) for x in seen[:3]}) == 3 and seen[3] == seen[0])
+
+    # A fixed LAYOUT re-fills the selection with that layout every time (and wraps).
+    for layout, expected in ((2, 1), (2, 1), (3, 2), (4, 0)):
+        bpy.ops.object.mode_set(mode='EDIT')
+        stats = ns["quad_fill"](obj, layout=layout)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        check(f"quad_fill layout {layout}", stats["variants"] == [(expected + 1, 3)]
+              and layout_now() == seen[expected], str(stats))
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    check("quad_fill cycle closed", sum(e.is_boundary for e in bm.edges) == 11
+          and not any(v.is_wire or not v.link_faces for v in bm.verts))
+    bm.free()
+    check_registers_nothing("quad_fill")
+    results["quad_fill"] = out
+
+
 TESTS = [test_rotate_z_90, test_grid_circle, test_gn_simple_deform, test_uv_channels,
-         test_proxy_setup, test_rotate_view]
+         test_proxy_setup, test_rotate_view, test_quad_fill]
 
 
 def main():
